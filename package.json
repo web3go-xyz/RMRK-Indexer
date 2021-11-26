@@ -8,7 +8,8 @@
     "build": "tsc -b",
     "prepack": "rm -rf dist && npm build",
     "test": "jest",
-    "codegen": "./node_modules/.bin/subql codegen"
+    "codegen": "./node_modules/.bin/subql codegen",
+    "migrate": "./node_modules/.bin/subql migrate"
   },
   "homepage": "https://github.com/subquery/subql-starter",
   "repository": "github:subquery/subql-starter",

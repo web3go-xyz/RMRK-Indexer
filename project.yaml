@@ -1,59 +1,55 @@
-specVersion: 0.0.1
+specVersion: 0.2.0
+name: magick
+version: 1.0.0
 description: None
-repository: ""
-schema: ./schema.graphql
+repository: ''
+schema:
+  file: ./schema.graphql
 network:
+  genesisHash: '0xb0a8d493285c2df73290dfb7e61f870f17b41801197a149ca93654499ea3dafe'
   endpoint: wss://kusama.api.onfinality.io/public-ws
   dictionary: https://api.subquery.network/sq/subquery/dictionary-kusama
-definitions:
-  mapping: &mymapping
-    handlers:
-      - handler: handleCall
-        kind: substrate/CallHandler
-        filter:
-          module: utility
-          method: batch_all
-          success: true
-      - handler: handleCall
-        kind: substrate/CallHandler
-        filter:
-          module: utility
-          method: batch
-          success: true
-      - handler: handleCall
-        kind: substrate/CallHandler
-        filter:
-          module: system
-          method: remark
-          success: true
-      - handler: handleRemark
-        kind: substrate/CallHandler
-        filter:
-          module: utility
-          method: batch_all
-          success: true
-      - handler: handleRemark
-        kind: substrate/CallHandler
-        filter:
-          module: utility
-          method: batch
-          success: true
-      - handler: handleRemark
-        kind: substrate/CallHandler
-        filter:
-          module: system
-          method: remark
-          success: true
 dataSources:
-  - name: main
-    kind: substrate/Runtime
+  - kind: substrate/Runtime
     filter:
       specName: kusama
-    startBlock: 4892957
-    mapping: *mymapping # can reuse or change
-  - name: westendRuntime
-    kind: substrate/Runtime
-    filter:
-      specName: westend
-    startBlock: 7161214
-    mapping: *mymapping # can reuse or change
+    startBlock: 9053414
+    mapping:
+      file: ./dist/index.js
+      handlers:
+        - handler: handleCall
+          kind: substrate/CallHandler
+          filter:
+            module: utility
+            method: batch_all
+            success: true
+        - handler: handleCall
+          kind: substrate/CallHandler
+          filter:
+            module: utility
+            method: batch
+            success: true
+        - handler: handleCall
+          kind: substrate/CallHandler
+          filter:
+            module: system
+            method: remark
+            success: true
+        - handler: handleRemark
+          kind: substrate/CallHandler
+          filter:
+            module: utility
+            method: batch_all
+            success: true
+        - handler: handleRemark
+          kind: substrate/CallHandler
+          filter:
+            module: utility
+            method: batch
+            success: true
+        - handler: handleRemark
+          kind: substrate/CallHandler
+          filter:
+            module: system
+            method: remark
+            success: true
