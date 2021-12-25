@@ -43,6 +43,7 @@ class NFTUtils {
   public static getRmrkSpecVersion = (rmrkString: string): RmrkSpecVersion => {
     try {
       const split = NFTUtils.splitRmrkString(rmrkString);
+
       if (split.length >= 3) {
         let version = split[2];
 
@@ -56,7 +57,8 @@ class NFTUtils {
       }
       return RmrkSpecVersion.V01;
     } catch (e) {
-      throw e
+      logger.error(`getRmrkSpecVersion ${e}`);
+      return RmrkSpecVersion.V1;
     }
   }
 
@@ -106,8 +108,10 @@ class NFTUtils {
       return RmrkEvent.CREATE
     }
 
-    throw new EvalError(`[NFTUtils] Unable to get action from ${rmrkString}`);
+    //throw new EvalError(`[NFTUtils] Unable to get action from ${rmrkString}`);
+    logger.error(`[NFTUtils] Unable to get action from ${rmrkString}`);
 
+    return RmrkEvent.UNKNOWN;
   }
 
   public static unwrap(rmrkString: string): any {
@@ -186,14 +190,17 @@ class NFTUtils {
 
   private static splitRmrkString(rmrkString: string): string[] {
     const rmrk = isHex(rmrkString) ? hexToString(rmrkString) : rmrkString
+    let decoded = rmrk;
     try {
-      const decoded = decodeURIComponent(rmrk)
-      const split = decoded.split(SQUARE)
-
-      return split;
+      decoded = decodeURIComponent(rmrk);
     } catch (e) {
-      throw e
+      logger.error(`splitRmrkString.decodeURIComponent exception ${e}`);
+      decoded = rmrk;
     }
+
+    const split = decoded.split(SQUARE);
+    return split;
+
   }
 
 }

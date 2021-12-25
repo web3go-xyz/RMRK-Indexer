@@ -5,6 +5,10 @@ import { RemarkResult } from './extract'
 
 
 
+
+
+
+
 export enum RmrkEvent {
   MINT = 'MINT',
   MINTNFT = 'MINTNFT',
@@ -15,9 +19,10 @@ export enum RmrkEvent {
   SEND = 'SEND',
   EMOTE = 'EMOTE',
 
-  BURN = 'BURN',  //Event Alias as CONSUME in Standard 2.0.0 
+  BURN = 'BURN',
 
-  CREATE = 'CREATE',  //Event Alias as MINT COLLECTION in Standard 2.0.0 
+  CREATE = 'CREATE',
+
 
 
   //Event for new features in Standard 2.0.0 
@@ -31,6 +36,7 @@ export enum RmrkEvent {
   SETPRIORITY = 'SETPRIORITY',
   SETPROPERTY = 'SETPROPERTY',
   LOCK = 'LOCK',
+  UNKNOWN = "UNKNOWN"
 }
 
 export const getNftId = (nft: any, blocknumber?: string | number): string => {
