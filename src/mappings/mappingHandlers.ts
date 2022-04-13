@@ -10,6 +10,12 @@ import {
   Event,
 } from './../types/interfaces'
 
+/**
+ * Save event entities to db
+ * @method saveEventEntities
+ * @param {Event[]} events - List of events containing data about an event emitted
+ * @returns {string} event id
+ */  
 async function saveEventEntities(events?: Event[]): Promise<string> {
   let eventId = '';
   if (events) {
@@ -36,6 +42,11 @@ async function saveEventEntities(events?: Event[]): Promise<string> {
   return eventId;
 }
 
+/**
+ * Save the remark result to collection db (v1)
+ * @method collection_V1
+ * @param {RemarkResult} remark - Value, caller, block number, timestamp and extra call of a remark
+ */  
 async function collection_V1(remark: RemarkResult) {
   let collection = null
   try {
@@ -74,11 +85,21 @@ async function collection_V1(remark: RemarkResult) {
   }
 
 }
+
+/**
+ * Save the remark result to collection db (v2)
+ * @method collection_V2
+ * @param {RemarkResult} remark - Value, caller, block number, timestamp and extra call of a remark
+ */  
 async function collection_V2(remark: RemarkResult) {
   collection_V1(remark);
 }
 
-
+/**
+ * Save the remark result of newly minted NFT and corresponding event to db (v1)
+ * @method mintNFT_V1
+ * @param {RemarkResult} remark - Value, caller, block number, timestamp and extra call of a remark
+ */  
 async function mintNFT_V1(remark: RemarkResult) {
   let nft = null;
   const specVersion: RmrkSpecVersion = NFTUtils.getRmrkSpecVersion(remark.value)
@@ -125,6 +146,11 @@ async function mintNFT_V1(remark: RemarkResult) {
   }
 }
 
+/**
+ * Save the newly minted NFT and corresponding event to db (v2)
+ * @method mintNFT_V2
+ * @param {RemarkResult} remark - Value, caller, block number, timestamp and extra call of a remark
+ */  
 async function mintNFT_V2(remark: RemarkResult) {
   let nft = null
   try {
@@ -193,6 +219,11 @@ async function mintNFT_V2(remark: RemarkResult) {
   }
 }
 
+/**
+ * Save the target NFT from remark result and corresponding event to db (v1)
+ * @method send_V1
+ * @param {RemarkResult} remark - Value, caller, block number, timestamp and extra call of a remark
+ */  
 async function send_V1(remark: RemarkResult) {
   let interaction: RmrkSendInteraction = null
 
@@ -222,6 +253,12 @@ async function send_V1(remark: RemarkResult) {
     await logFail(JSON.stringify(interaction), e.message, RmrkEvent.SEND, remark)
   }
 }
+
+/**
+ * Save the target NFT from remark result and corresponding event to db (v2)
+ * @method send_V2
+ * @param {RemarkResult} remark - Value, caller, block number, timestamp and extra call of a remark
+ */  
 async function send_V2(remark: RemarkResult) {
   let interaction: RmrkSendInteraction = null
 
@@ -309,6 +346,11 @@ async function send_V2(remark: RemarkResult) {
   }
 }
 
+/**
+ * Save the target bought NFT from remark result and corresponding event to db
+ * @method buy
+ * @param {RemarkResult} remark - Value, caller, block number, timestamp and extra call of a remark
+ */  
 async function buy(remark: RemarkResult) {
   let interaction = null
 
@@ -341,6 +383,11 @@ async function buy(remark: RemarkResult) {
   // enough money ?
 }
 
+/**
+ * Save the target consumed NFT from remark result and corresponding event to db
+ * @method consume
+ * @param {RemarkResult} remark - Value, caller, block number, timestamp and extra call of a remark
+ */  
 //Standard 1.0.0 CONSUME
 //Standard 2.0.0 BURN as alias
 async function consume(remark: RemarkResult, eventAlias: RmrkEvent) {
@@ -368,6 +415,11 @@ async function consume(remark: RemarkResult, eventAlias: RmrkEvent) {
   }
 }
 
+/**
+ * Save the target listed NFT from remark result and corresponding event to db
+ * @method list
+ * @param {RemarkResult} remark - Value, caller, block number, timestamp and extra call of a remark
+ */  
 async function list(remark: RemarkResult) {
   let interaction = null;
 
@@ -399,6 +451,11 @@ async function list(remark: RemarkResult) {
   // is owner
 }
 
+/**
+ * Save the changeIssuer collection from remark result and corresponding event to db
+ * @method changeIssuer
+ * @param {RemarkResult} remark - Value, caller, block number, timestamp and extra call of a remark
+ */  
 async function changeIssuer(remark: RemarkResult) {
   let interaction = null
 
@@ -421,6 +478,11 @@ async function changeIssuer(remark: RemarkResult) {
 
 }
 
+/**
+ * Save the target emote from remark result and corresponding event to db
+ * @method emote
+ * @param {RemarkResult} remark - Value, caller, block number, timestamp and extra call of a remark
+ */  
 async function emote(remark: RemarkResult) {
   let interaction = null
 
@@ -458,6 +520,14 @@ async function emote(remark: RemarkResult) {
   // has meta
 }
 
+/**
+ * Log the failing info
+ * @method logFail
+ * @param {string} message - The failing message
+ * @param {string} reason - The reason of failure
+ * @param {RmrkEvent} interaction - The interaction where failing happened
+ * @param {RemarkResult} remark - Value, caller, block number, timestamp and extra call of a remark
+ */  
 async function logFail(message: string, reason: string, interaction: RmrkEvent, remark: RemarkResult) {
   try {
     const fail = {
@@ -476,6 +546,11 @@ async function logFail(message: string, reason: string, interaction: RmrkEvent, 
   }
 }
 
+/**
+ * Save the accepted NFT from remark result and corresponding event to db
+ * @method accept
+ * @param {RemarkResult} remark - Value, caller, block number, timestamp and extra call of a remark
+ */   
 async function accept(remark: RemarkResult) {
 
   let interaction: RmrkAcceptInteraction = null
@@ -522,6 +597,12 @@ async function accept(remark: RemarkResult) {
   }
 
 }
+
+/**
+ * Save the newly added resource info for nft from remark result and corresponding event to db
+ * @method resAdd
+ * @param {RemarkResult} remark - Value, caller, block number, timestamp and extra call of a remark
+ */  
 async function resAdd(remark: RemarkResult) {
 
   let interaction = null
@@ -577,6 +658,11 @@ async function resAdd(remark: RemarkResult) {
 
 }
 
+/**
+ * Handle remark data at the target fetched block
+ * @method handleRemark
+ * @param {SubstrateExtrinsic} extrinsic - The extrinsic containing data about a function call
+ */  
 export async function handleRemark(extrinsic: SubstrateExtrinsic): Promise<void> {
   const records = getRemarksFrom(extrinsic);
 
