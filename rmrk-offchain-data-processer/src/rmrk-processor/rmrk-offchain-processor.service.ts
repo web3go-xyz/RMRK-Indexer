@@ -20,12 +20,12 @@ import { RemarkResult } from './support/utils';
 import { canOrElseError, exists, hasMeta, isBurned, isBuyLegalOrElseError, isOwner, isOwnerOrElseError, isPositiveOrElseError, isTransferable, unwrapBuyPrice, validateMeta, validateNFT } from './support/utils/consolidator';
 import { emoteId, ensureInteraction } from './support/utils/helper';
 import { randomBytes } from 'crypto';
+import { Cron } from "@nestjs/schedule";
 
 @Injectable()
 export class RMRKOffchainProcessorService {
   truncateFlag: boolean = false;
   runFlag: boolean = true;
-  interval: number = 600 * 100;
   processBatchSize = 100;
 
   constructor(
@@ -50,43 +50,49 @@ export class RMRKOffchainProcessorService {
   ) {
   }
 
+  @Cron("*/30 * * * * *")
   async startProcess() {
 
     if (this.truncateFlag) {
       await this.truncatePreviousData();
     }
 
-    MyLogger.verbose('startProcess ' + this.runFlag);
-    while (this.runFlag) {
-      try {
-        let remarkRecords = await this.remarkRepository.find({
-          where: {
-            processed: 0
-          },
-          order: {
-            timestamp: 'ASC'
-          },
-          take: this.processBatchSize,
-        });
+    if (this.runFlag) {
+      MyLogger.warn('RMRM processor is running, abort.');
+      return;
+    }
+    this.runFlag = true;
+    MyLogger.verbose('RMRM processor startProcess ');
 
-        if (remarkRecords && remarkRecords.length > 0) {
-          MyLogger.verbose('start to process ' + remarkRecords.length + ' remark records');
+    try {
+      let remarkRecords = await this.remarkRepository.find({
+        where: {
+          processed: 0
+        },
+        order: {
+          timestamp: 'ASC'
+        },
+        take: this.processBatchSize,
+      });
 
-          await this.handleRemark(remarkRecords);
-        }
-        else {
-          MyLogger.verbose('no remark records to process ');
-        }
+      if (remarkRecords && remarkRecords.length > 0) {
+        MyLogger.verbose('start to process ' + remarkRecords.length + ' remark records');
 
-      } catch (error) {
-        MyLogger.error('process with error:' + error);
+        await this.handleRemark(remarkRecords);
       }
-      finally {
-        MyLogger.verbose('sleep for ' + this.interval);
-        await FunctionExt.sleep(this.interval);
+      else {
+        MyLogger.verbose('no remark records to process ');
       }
+
+    } catch (error) {
+      MyLogger.error('RMRM processor process with error:' + error);
+    }
+    finally {
+      MyLogger.verbose(`RMRM processor finished`);
+      this.runFlag = false;
     }
   }
+
   async truncatePreviousData() {
     MyLogger.warn('truncate previous data');
     await this.eventRepository.createQueryBuilder().delete()
@@ -117,8 +123,8 @@ export class RMRKOffchainProcessorService {
   }
   async handleRemark(remarkRecords: RemarkEntities[]) {
     for (let index = 0; index < remarkRecords.length; index++) {
-      MyLogger.verbose('handleRemark index=' + index);
       const remarkEntity = remarkRecords[index];
+      MyLogger.verbose(`handleRemark [block_number-${remarkEntity.blockNumber}] index= ${index} , id=${remarkEntity.id}`);
 
       let handleRemarkResult = 0;
       try {
@@ -130,7 +136,7 @@ export class RMRKOffchainProcessorService {
         const event: RmrkEvent = NFTUtils.getAction(decoded);
         const specVersion: RmrkSpecVersion = NFTUtils.getRmrkSpecVersion(decoded);
 
-        MyLogger.verbose('handleRemark event=' + event + ',specVersion=' + specVersion + ',decoded=' + decoded);
+        MyLogger.verbose(`handleRemark [block_number-${remarkEntity.blockNumber}] event=` + event + ',specVersion=' + specVersion + ',decoded=' + decoded);
 
         switch (event) {
           case RmrkEvent.CREATE:
