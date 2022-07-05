@@ -25,7 +25,7 @@ import { Cron } from "@nestjs/schedule";
 @Injectable()
 export class RMRKOffchainProcessorService {
   truncateFlag: boolean = false;
-  runFlag: boolean = true;
+  isRunning: boolean = false;
   processBatchSize = 100;
 
   constructor(
@@ -57,11 +57,11 @@ export class RMRKOffchainProcessorService {
       await this.truncatePreviousData();
     }
 
-    if (this.runFlag) {
+    if (this.isRunning) {
       MyLogger.warn('RMRM processor is running, abort.');
       return;
     }
-    this.runFlag = true;
+    this.isRunning = true;
     MyLogger.verbose('RMRM processor startProcess ');
 
     try {
@@ -89,7 +89,7 @@ export class RMRKOffchainProcessorService {
     }
     finally {
       MyLogger.verbose(`RMRM processor finished`);
-      this.runFlag = false;
+      this.isRunning = false;
     }
   }
 
