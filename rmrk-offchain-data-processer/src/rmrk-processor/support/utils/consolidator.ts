@@ -29,7 +29,7 @@ export function isIssuer(entity: Entity, caller: string) {
 }
 
 
-export function isOwnerOrElseError(entity: Entity, caller: string) {
+export function isCurrentOwnerOrElseError(entity: Entity, caller: string) {
   if (!isOwner(entity, caller)) {
     throw new ReferenceError(`[CONSOLIDATE Bad Owner] Entity: ${entity.issuer} Caller: ${caller}`)
   }

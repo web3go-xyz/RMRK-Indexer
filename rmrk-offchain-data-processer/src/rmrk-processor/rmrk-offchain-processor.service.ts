@@ -17,7 +17,7 @@ import { FunctionExt } from 'src/common/utility/functionExt';
 import { Collection, eventFrom, getNftId_V01, getNftId_V1, getNftId_V2, NFT, RmrkAcceptInteraction, RmrkAcceptType, RmrkEvent, RmrkInteraction, RmrkResAddInteraction, RmrkSendInteraction, RmrkSpecVersion } from './support/utils/types';
 import NFTUtils, { hexToString } from './support/utils/NftUtils';
 import { RemarkResult } from './support/utils';
-import { canOrElseError, exists, hasMeta, isBurned, isBuyLegalOrElseError, isOwner, isOwnerOrElseError, isPositiveOrElseError, isTransferable, unwrapBuyPrice, validateMeta, validateNFT } from './support/utils/consolidator';
+import { canOrElseError, exists, hasMeta, isBurned, isBuyLegalOrElseError, isOwner, isCurrentOwnerOrElseError, isPositiveOrElseError, isTransferable, unwrapBuyPrice, validateMeta, validateNFT } from './support/utils/consolidator';
 import { emoteId, ensureInteraction } from './support/utils/helper';
 import { randomBytes } from 'crypto';
 import { Cron } from "@nestjs/schedule";
@@ -322,7 +322,7 @@ export class RMRKOffchainProcessorService {
       let collection = await this.collectionRepository.findOne(nft.collection);
       collection = await this.checkCollection(collection, nft, RmrkSpecVersion.V1, remark);
 
-      isOwnerOrElseError(collection, remark.caller);
+      isCurrentOwnerOrElseError(collection, remark.caller);
 
       if (specVersion === RmrkSpecVersion.V01) {
         nft.id = getNftId_V01(nft);
@@ -366,7 +366,7 @@ export class RMRKOffchainProcessorService {
       let collection = await this.collectionRepository.findOne(nft.collection);
       collection = await this.checkCollection(collection, nft, RmrkSpecVersion.V1, remark);
 
-      isOwnerOrElseError(collection, remark.caller);
+      isCurrentOwnerOrElseError(collection, remark.caller);
 
       nft.id = getNftId_V2(nft, remark.blockNumber);
       const newNFT = new NFTEntities();
@@ -438,7 +438,9 @@ export class RMRKOffchainProcessorService {
 
       const currentNFT = await this.nftRepository.findOne(interaction.id);
       validateNFT(currentNFT)
-      isOwnerOrElseError(currentNFT, remark.caller)
+
+      // bugfix:  currentOwner may be account or nft, so should no validate currentOwner.
+      //isCurrentOwnerOrElseError(nft, remark.caller);
 
       if (specVersion === RmrkSpecVersion.V1 || specVersion === RmrkSpecVersion.V01) {
         //Standard 1.0.0: auto ACCEPT     
@@ -467,7 +469,10 @@ export class RMRKOffchainProcessorService {
 
       const currentNFT = await this.nftRepository.findOne(interaction.id);
       validateNFT(currentNFT)
-      isOwnerOrElseError(currentNFT, remark.caller)
+
+      // bugfix:  currentOwner may be account or nft, so should no validate currentOwner.
+      //isCurrentOwnerOrElseError(nft, remark.caller);
+
 
       if (specVersion === RmrkSpecVersion.V2) {
         // Standard 2.0.0: 
@@ -594,7 +599,10 @@ export class RMRKOffchainProcessorService {
       const nft = await this.nftRepository.findOne(interaction.id)
       canOrElseError<NFTEntities>(exists, nft, true);
       canOrElseError<NFTEntities>(isBurned, nft);
-      isOwnerOrElseError(nft, remark.caller);
+
+      // bugfix:  currentOwner may be account or nft, so should no validate currentOwner.
+      //isCurrentOwnerOrElseError(nft, remark.caller);
+
       nft.price = BigInt(0).toString();
       nft.burned = true;
       let event = eventFrom(eventAlias, remark, interaction.metadata, nft.collectionId, nft.id, nft.currentOwner, nft.price);
@@ -618,7 +626,10 @@ export class RMRKOffchainProcessorService {
       const nft = await this.nftRepository.findOne(interaction.id);
       validateNFT(nft);
       validateMeta(interaction);
-      isOwnerOrElseError(nft, remark.caller);
+
+      // bugfix:  currentOwner may be account or nft, so should no validate currentOwner.
+      //isOwnerOrElseError(nft, remark.caller);
+
       const price = BigInt(interaction.metadata);
       isPositiveOrElseError(price);
       nft.price = price.toString();
@@ -650,7 +661,11 @@ export class RMRKOffchainProcessorService {
       canOrElseError<RmrkInteraction>(hasMeta, interaction, true)
       const collection = await this.collectionRepository.findOne(interaction.id)
       canOrElseError<CollectionEntities>(exists, collection, true)
-      isOwnerOrElseError(collection, remark.caller);
+
+      // bugfix:  currentOwner may be account or nft, so should no validate currentOwner.
+      //isCurrentOwnerOrElseError(nft, remark.caller);
+
+
       let event = (eventFrom(RmrkEvent.CHANGEISSUER, remark, interaction.metadata, collection.id, '', collection.currentOwner, BigInt(0).toString()))
       collection.currentOwner = interaction.metadata;
       collection.eventId = await this.saveEventEntities(event, collection.eventId);
