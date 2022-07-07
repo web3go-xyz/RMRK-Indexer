@@ -43,8 +43,10 @@ export class NFTEntities {
   @Column("text", { name: "metadata", nullable: true })
   metadata: string | null;
 
-  @Column("text", { name: "current_owner", nullable: true })
-  currentOwner: string | null;
+  @Column("text", { name: "current_owner_account", nullable: true, comment: 'current owner account address' })
+  currentOwnerAccount: string | null;
+  @Column("text", { name: "current_owner_nft", nullable: true, comment: 'current owned parent NFT' })
+  currentOwnerNFT: string | null;
 
   @Column("numeric", { name: "price", nullable: true })
   price: string | null;

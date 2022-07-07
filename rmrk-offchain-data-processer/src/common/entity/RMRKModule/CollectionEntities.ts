@@ -27,8 +27,8 @@ export class CollectionEntities {
   @Column("text", { name: "metadata", nullable: true })
   metadata: string | null;
 
-  @Column("text", { name: "current_owner", nullable: true })
-  currentOwner: string | null;
+  @Column("text", { name: "current_owner_account", nullable: true, comment: 'current owner account address' })
+  currentOwnerAccount: string | null;
 
   @Column("jsonb", { name: "events", nullable: true })
   events: object | null;
