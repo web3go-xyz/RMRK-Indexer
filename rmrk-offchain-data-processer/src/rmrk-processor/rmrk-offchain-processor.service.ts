@@ -25,7 +25,7 @@ import { Cron } from "@nestjs/schedule";
 export class RMRKOffchainProcessorService {
   truncateFlag: boolean = false;
   isRunning: boolean = false;
-  processBatchSize = 100;
+  processBatchSize = 300;
 
   constructor(
 
@@ -49,7 +49,7 @@ export class RMRKOffchainProcessorService {
   ) {
   }
 
-  @Cron("*/30 * * * * *")
+  @Cron("*/3 * * * * *")
   async startProcess() {
 
     if (this.truncateFlag) {
