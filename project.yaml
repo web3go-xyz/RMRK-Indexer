@@ -1,42 +1,45 @@
-specVersion: 0.0.1
+specVersion: 1.0.0
 description: Indexer for RMRK based on SubQuery Starter
 repository: ""
-schema: ./schema.graphql
+schema:
+  file: ./schema.graphql
+runner:
+  node:
+    name: "@subql/node"
+    version: ">=1.2.1"
+  query:
+    name: "@subql/query"
+    version: ">=1.2.1"
 network:
   endpoint: wss://kusama.api.onfinality.io/public-ws
+  genesisHash: "0xb0a8d493285c2df73290dfb7e61f870f17b41801197a149ca93654499ea3dafe"
   # endpoint: wss://kusama-rpc.polkadot.io
   dictionary: https://api.subquery.network/sq/subquery/dictionary-kusama
-definitions:
-  mapping: &mymapping
-    handlers:
-      - handler: handleRemark
-        kind: substrate/CallHandler
-        filter:
-          module: utility
-          method: batchAll
-          success: true
-      - handler: handleRemark
-        kind: substrate/CallHandler
-        filter:
-          module: utility
-          method: batch
-          success: true
-      - handler: handleRemark
-        kind: substrate/CallHandler
-        filter:
-          module: system
-          method: remark
-          success: true
+
 dataSources:
   - name: main
     kind: substrate/Runtime
     filter:
       specName: kusama
-    startBlock: 4892957  #6802210 #4892957
-    mapping: *mymapping # can reuse or change
-  - name: westendRuntime
-    kind: substrate/Runtime
-    filter:
-      specName: westend
-    startBlock: 7161214
-    mapping: *mymapping # can reuse or change
+    startBlock: 15015000  #6802210 #4892957
+    mapping: 
+      file: ./dist/index.js
+      handlers:
+          - handler: handleRemark
+            kind: substrate/CallHandler
+            filter:
+              module: utility
+              method: batchAll
+              success: true
+          - handler: handleRemark
+            kind: substrate/CallHandler
+            filter:
+              module: utility
+              method: batch
+              success: true
+          - handler: handleRemark
+            kind: substrate/CallHandler
+            filter:
+              module: system
+              method: remark
+              success: true
