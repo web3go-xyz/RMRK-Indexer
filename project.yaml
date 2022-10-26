@@ -21,7 +21,7 @@ dataSources:
     kind: substrate/Runtime
     filter:
       specName: kusama
-    startBlock: 4892957  #6802210 #4892957
+    startBlock: 15015000  #6802210 #4892957
     mapping: 
       file: ./dist/index.js
       handlers:
@@ -43,4 +43,3 @@ dataSources:
               module: system
               method: remark
               success: true
-

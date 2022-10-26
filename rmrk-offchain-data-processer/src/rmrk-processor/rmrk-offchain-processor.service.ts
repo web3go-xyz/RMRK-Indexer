@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { FindConditions, In, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { RepositoryConsts } from 'src/common/orm/repositoryConsts';
 import {
   Event, NFTChild, Resource,
@@ -13,20 +13,19 @@ import { Emotes } from 'src/common/entity/RMRKModule/Emotes';
 import { FailedEntities } from 'src/common/entity/RMRKModule/FailedEntities';
 import { RemarkEntities } from 'src/common/entity/RMRKModule/RemarkEntities';
 import { MyLogger } from 'src/common/log/logger.service';
-import { FunctionExt } from 'src/common/utility/functionExt';
 import { Collection, eventFrom, getNftId_V01, getNftId_V1, getNftId_V2, NFT, RmrkAcceptInteraction, RmrkAcceptType, RmrkEvent, RmrkInteraction, RmrkResAddInteraction, RmrkSendInteraction, RmrkSpecVersion } from './support/utils/types';
 import NFTUtils, { hexToString } from './support/utils/NftUtils';
 import { RemarkResult } from './support/utils';
-import { canOrElseError, exists, hasMeta, isBurned, isBuyLegalOrElseError, isOwner, isOwnerOrElseError, isPositiveOrElseError, isTransferable, unwrapBuyPrice, validateMeta, validateNFT } from './support/utils/consolidator';
+import { canOrElseError, exists, hasMeta, isBurned, isBuyLegalOrElseError, isCurrentOwnerAccountOrElseError, isOwnerAccount, isPositiveOrElseError, isTransferable, unwrapBuyPrice, validateMeta, validateNFT } from './support/utils/consolidator';
 import { emoteId, ensureInteraction } from './support/utils/helper';
 import { randomBytes } from 'crypto';
+import { Cron } from "@nestjs/schedule";
 
 @Injectable()
 export class RMRKOffchainProcessorService {
   truncateFlag: boolean = false;
-  runFlag: boolean = true;
-  interval: number = 600 * 100;
-  processBatchSize = 100;
+  isRunning: boolean = false;
+  processBatchSize = 300;
 
   constructor(
 
@@ -50,43 +49,49 @@ export class RMRKOffchainProcessorService {
   ) {
   }
 
+  @Cron("*/3 * * * * *")
   async startProcess() {
 
     if (this.truncateFlag) {
       await this.truncatePreviousData();
     }
 
-    MyLogger.verbose('startProcess ' + this.runFlag);
-    while (this.runFlag) {
-      try {
-        let remarkRecords = await this.remarkRepository.find({
-          where: {
-            processed: 0
-          },
-          order: {
-            timestamp: 'ASC'
-          },
-          take: this.processBatchSize,
-        });
+    if (this.isRunning) {
+      MyLogger.warn('RMRM processor is running, abort.');
+      return;
+    }
+    this.isRunning = true;
+    MyLogger.verbose('RMRM processor startProcess ');
 
-        if (remarkRecords && remarkRecords.length > 0) {
-          MyLogger.verbose('start to process ' + remarkRecords.length + ' remark records');
+    try {
+      let remarkRecords = await this.remarkRepository.find({
+        where: {
+          processed: 0
+        },
+        order: {
+          timestamp: 'ASC'
+        },
+        take: this.processBatchSize,
+      });
 
-          await this.handleRemark(remarkRecords);
-        }
-        else {
-          MyLogger.verbose('no remark records to process ');
-        }
+      if (remarkRecords && remarkRecords.length > 0) {
+        MyLogger.verbose('start to process ' + remarkRecords.length + ' remark records');
 
-      } catch (error) {
-        MyLogger.error('process with error:' + error);
+        await this.handleRemark(remarkRecords);
       }
-      finally {
-        MyLogger.verbose('sleep for ' + this.interval);
-        await FunctionExt.sleep(this.interval);
+      else {
+        MyLogger.verbose('no remark records to process ');
       }
+
+    } catch (error) {
+      MyLogger.error('RMRM processor process with error:' + error);
+    }
+    finally {
+      MyLogger.verbose(`RMRM processor finished`);
+      this.isRunning = false;
     }
   }
+
   async truncatePreviousData() {
     MyLogger.warn('truncate previous data');
     await this.eventRepository.createQueryBuilder().delete()
@@ -117,20 +122,21 @@ export class RMRKOffchainProcessorService {
   }
   async handleRemark(remarkRecords: RemarkEntities[]) {
     for (let index = 0; index < remarkRecords.length; index++) {
-      MyLogger.verbose('handleRemark index=' + index);
       const remarkEntity = remarkRecords[index];
+      MyLogger.verbose(`handleRemark [block_number-${remarkEntity.blockNumber}] index= ${index} , id=${remarkEntity.id}`);
 
       let handleRemarkResult = 0;
       try {
         let remark: RemarkResult = {
           ...remarkEntity,
-          extra: JSON.parse(remarkEntity.extra)
+          extra: JSON.parse(remarkEntity.extra),
+          remark_entity_id: remarkEntity.id
         }
         const decoded = hexToString(remark.value);
         const event: RmrkEvent = NFTUtils.getAction(decoded);
         const specVersion: RmrkSpecVersion = NFTUtils.getRmrkSpecVersion(decoded);
 
-        MyLogger.verbose('handleRemark event=' + event + ',specVersion=' + specVersion + ',decoded=' + decoded);
+        MyLogger.verbose(`handleRemark [block_number-${remarkEntity.blockNumber}] event=` + event + ',specVersion=' + specVersion + ',decoded=' + decoded);
 
         switch (event) {
           case RmrkEvent.CREATE:
@@ -243,14 +249,14 @@ export class RMRKOffchainProcessorService {
       newCollection.name = collection.name.trim()
       newCollection.max = Number(collection.max)
       newCollection.issuer = remark.caller
-      newCollection.currentOwner = remark.caller
+      newCollection.currentOwnerAccount = remark.caller
       newCollection.symbol = collection.symbol.trim()
       newCollection.blockNumber = remark.blockNumber
       newCollection.metadata = collection.metadata
       newCollection.timestampCreatedAt = remark.timestamp;
       newCollection.timestampUpdatedAt = remark.timestamp;
 
-      let event = eventFrom(RmrkEvent.MINT, remark, '', collection.id, '', newCollection.currentOwner, BigInt(0).toString());
+      let event = eventFrom(RmrkEvent.MINT, remark, '', collection.id, '', newCollection.currentOwnerAccount, BigInt(0).toString());
       newCollection.eventId = await this.saveEventEntities(event, newCollection.eventId);
 
       MyLogger.verbose(`SAVED [COLLECTION] ${newCollection.id}`)
@@ -284,13 +290,13 @@ export class RMRKOffchainProcessorService {
         newCollection.version = specVersion;
         newCollection.max = 9999;
         newCollection.issuer = remark.caller;
-        newCollection.currentOwner = remark.caller;
+        newCollection.currentOwnerAccount = remark.caller;
         newCollection.blockNumber = remark.blockNumber;
         newCollection.metadata = '';
         newCollection.timestampCreatedAt = remark.timestamp;
         newCollection.timestampUpdatedAt = remark.timestamp;
 
-        let event = eventFrom(RmrkEvent.MINT, remark, '', newCollection.id, '', newCollection.currentOwner, BigInt(0).toString());
+        let event = eventFrom(RmrkEvent.MINT, remark, '', newCollection.id, '', newCollection.currentOwnerAccount, BigInt(0).toString());
         newCollection.eventId = await this.saveEventEntities(event, newCollection.eventId);
 
         MyLogger.verbose(`SAVED [COLLECTION] ${newCollection.id}`)
@@ -316,7 +322,7 @@ export class RMRKOffchainProcessorService {
       let collection = await this.collectionRepository.findOne(nft.collection);
       collection = await this.checkCollection(collection, nft, RmrkSpecVersion.V1, remark);
 
-      isOwnerOrElseError(collection, remark.caller);
+      isCurrentOwnerAccountOrElseError(collection, remark.caller);
 
       if (specVersion === RmrkSpecVersion.V01) {
         nft.id = getNftId_V01(nft);
@@ -326,7 +332,7 @@ export class RMRKOffchainProcessorService {
       const newNFT = new NFTEntities();
       newNFT.id = nft.id;
       newNFT.issuer = remark.caller;
-      newNFT.currentOwner = remark.caller;
+      newNFT.currentOwnerAccount = remark.caller;
       newNFT.blockNumber = remark.blockNumber;
       newNFT.name = nft.name || nft.instance;
       newNFT.instance = nft.instance;
@@ -339,7 +345,7 @@ export class RMRKOffchainProcessorService {
       newNFT.timestampCreatedAt = remark.timestamp;
       newNFT.timestampUpdatedAt = remark.timestamp;
 
-      let event = eventFrom(RmrkEvent.MINTNFT, remark, '', collection.id, newNFT.id, newNFT.currentOwner, (newNFT.price));
+      let event = eventFrom(RmrkEvent.MINTNFT, remark, '', collection.id, newNFT.id, newNFT.currentOwnerAccount, (newNFT.price));
       newNFT.eventId = await this.saveEventEntities(event, newNFT.eventId);
 
       MyLogger.verbose(`SAVED [MINT_NFT ${specVersion} SIMPLE] ${newNFT.id}`)
@@ -360,13 +366,13 @@ export class RMRKOffchainProcessorService {
       let collection = await this.collectionRepository.findOne(nft.collection);
       collection = await this.checkCollection(collection, nft, RmrkSpecVersion.V1, remark);
 
-      isOwnerOrElseError(collection, remark.caller);
+      isCurrentOwnerAccountOrElseError(collection, remark.caller);
 
       nft.id = getNftId_V2(nft, remark.blockNumber);
       const newNFT = new NFTEntities();
       newNFT.id = nft.id;
       newNFT.issuer = remark.caller;
-      newNFT.currentOwner = remark.caller;
+
       newNFT.blockNumber = remark.blockNumber;
       newNFT.name = nft.symbol || nft.name || nft.instance;
       newNFT.instance = nft.instance;
@@ -379,27 +385,28 @@ export class RMRKOffchainProcessorService {
       newNFT.timestampCreatedAt = remark.timestamp;
       newNFT.timestampUpdatedAt = remark.timestamp;
 
-      let event = eventFrom(RmrkEvent.MINTNFT, remark, '', collection.id, newNFT.id, newNFT.currentOwner, newNFT.price);
+      let event = eventFrom(RmrkEvent.MINTNFT, remark, '', collection.id, newNFT.id, remark.caller, newNFT.price);
       newNFT.eventId = await this.saveEventEntities(event, newNFT.eventId);
 
       if (!recipient) {
-
+        newNFT.currentOwnerAccount = remark.caller;
         MyLogger.verbose(`SAVED [MINT_NFT V2 SIMPLE] ${newNFT.id}`);
         await this.nftRepository.save(newNFT);
 
       }
 
       else {
-        newNFT.currentOwner = recipient;
 
         const parentNFT = await this.nftRepository.findOne(recipient);
         if (!parentNFT) {
-          // mint nft to the specified account directly        
+          // mint nft to the specified account directly 
+          newNFT.currentOwnerAccount = recipient;
           MyLogger.verbose(`SAVED [MINT_NFT V2 TO ACCOUNT] ${newNFT.id}`);
           await this.nftRepository.save(newNFT);
         }
         else {
           // mint nft to the specified nft as child 
+          newNFT.currentOwnerNFT = recipient;
 
           if (!parentNFT.children) {
             parentNFT.children = [];
@@ -432,13 +439,15 @@ export class RMRKOffchainProcessorService {
 
       const currentNFT = await this.nftRepository.findOne(interaction.id);
       validateNFT(currentNFT)
-      isOwnerOrElseError(currentNFT, remark.caller)
+
+      // bugfix:  currentOwner may be account or nft, so should no validate currentOwner.
+      //isCurrentOwnerOrElseError(nft, remark.caller);
 
       if (specVersion === RmrkSpecVersion.V1 || specVersion === RmrkSpecVersion.V01) {
         //Standard 1.0.0: auto ACCEPT     
         // currentNFT.price = BigInt(0);
-        let event = eventFrom(RmrkEvent.SEND, remark, interaction.recipient, currentNFT.collectionId, currentNFT.id, currentNFT.currentOwner, currentNFT.price);
-        currentNFT.currentOwner = interaction.recipient;
+        let event = eventFrom(RmrkEvent.SEND, remark, interaction.recipient, currentNFT.collectionId, currentNFT.id, remark.caller, currentNFT.price);
+        currentNFT.currentOwnerAccount = interaction.recipient;
         currentNFT.timestampUpdatedAt = remark.timestamp;
 
         currentNFT.eventId = await this.saveEventEntities(event, currentNFT.eventId);
@@ -461,7 +470,10 @@ export class RMRKOffchainProcessorService {
 
       const currentNFT = await this.nftRepository.findOne(interaction.id);
       validateNFT(currentNFT)
-      isOwnerOrElseError(currentNFT, remark.caller)
+
+      // bugfix:  currentOwner may be account or nft, so should no validate currentOwner.
+      //isCurrentOwnerOrElseError(nft, remark.caller);
+
 
       if (specVersion === RmrkSpecVersion.V2) {
         // Standard 2.0.0: 
@@ -471,8 +483,8 @@ export class RMRKOffchainProcessorService {
           //sending nft to account
           //same logic handle as RmrkSpecVersion.V1
           // currentNFT.price = BigInt(0);
-          let event = eventFrom(RmrkEvent.SEND, remark, interaction.recipient, currentNFT.collectionId, currentNFT.id, currentNFT.currentOwner, currentNFT.price);
-          currentNFT.currentOwner = interaction.recipient;
+          let event = eventFrom(RmrkEvent.SEND, remark, interaction.recipient, currentNFT.collectionId, currentNFT.id, remark.caller, currentNFT.price);
+          currentNFT.currentOwnerAccount = interaction.recipient;
           currentNFT.timestampUpdatedAt = remark.timestamp;
 
           currentNFT.eventId = await this.saveEventEntities(event, currentNFT.eventId);
@@ -481,8 +493,9 @@ export class RMRKOffchainProcessorService {
 
         }
         else {
-          // check if same owner for the source NFT and targetNFT
-          let sameOwner = isOwner(targetNFT, remark.caller);
+          // the source NFT is under the owner account  as remark.caller.
+          // check if the targte NFT is under the same owner account.
+          let sameOwner = isOwnerAccount(targetNFT, remark.caller);
           let pending: boolean = true;
           if (sameOwner) {
             // same owner => auto ACCEPT
@@ -505,12 +518,12 @@ export class RMRKOffchainProcessorService {
           await this.nftRepository.save(targetNFT);
 
 
-          let currentOwner = currentNFT.currentOwner;
+          let currentOwnerNFT = currentNFT.currentOwnerNFT;
           //remove currentNFT from its parent if it has parent.
-          if (currentOwner) {
-            const parent = await this.nftRepository.findOne(currentNFT.currentOwner);
+          if (currentOwnerNFT) {
+            const parent = await this.nftRepository.findOne(currentNFT.currentOwnerNFT);
             if (!parent) {
-              //the parent should be a account, no need to handle children properties
+              //cannot find the nft, no need to handle children properties
             }
             else {
               if (parent.children) {
@@ -526,9 +539,9 @@ export class RMRKOffchainProcessorService {
                 }
               }
             }
-            //update currentNFT.currentOwner =>  targetNFT.id             
-            let event = eventFrom(RmrkEvent.SEND, remark, interaction.recipient, currentNFT.collectionId, currentNFT.id, currentNFT.currentOwner, currentNFT.price);
-            currentNFT.currentOwner = targetNFT.id;
+            //update currentNFT.currentOwnerNFT =>  targetNFT.id             
+            let event = eventFrom(RmrkEvent.SEND, remark, interaction.recipient, currentNFT.collectionId, currentNFT.id, remark.caller, currentNFT.price);
+            currentNFT.currentOwnerNFT = targetNFT.id;
             currentNFT.timestampUpdatedAt = remark.timestamp;
 
             currentNFT.eventId = await this.saveEventEntities(event, currentNFT.eventId);
@@ -562,8 +575,8 @@ export class RMRKOffchainProcessorService {
       isPositiveOrElseError(BigInt(nft.price), true);
       isBuyLegalOrElseError(nft, remark.extra || []);
       nft.price = BigInt(unwrapBuyPrice(nft, remark.extra || [])).toString();  // Utility.batch_all => price for BUY
-      let event = eventFrom(RmrkEvent.BUY, remark, remark.caller, nft.collectionId, nft.id, nft.currentOwner, nft.price);
-      nft.currentOwner = remark.caller;
+      let event = eventFrom(RmrkEvent.BUY, remark, remark.caller, nft.collectionId, nft.id, remark.caller, nft.price);
+      nft.currentOwnerAccount = remark.caller;
       nft.timestampUpdatedAt = remark.timestamp;
 
       nft.eventId = await this.saveEventEntities(event, nft.eventId);
@@ -588,10 +601,13 @@ export class RMRKOffchainProcessorService {
       const nft = await this.nftRepository.findOne(interaction.id)
       canOrElseError<NFTEntities>(exists, nft, true);
       canOrElseError<NFTEntities>(isBurned, nft);
-      isOwnerOrElseError(nft, remark.caller);
+
+      // bugfix:  currentOwner may be account or nft, so should no validate currentOwner.
+      //isCurrentOwnerOrElseError(nft, remark.caller);
+
       nft.price = BigInt(0).toString();
       nft.burned = true;
-      let event = eventFrom(eventAlias, remark, interaction.metadata, nft.collectionId, nft.id, nft.currentOwner, nft.price);
+      let event = eventFrom(eventAlias, remark, interaction.metadata, nft.collectionId, nft.id, remark.caller, nft.price);
       nft.timestampUpdatedAt = remark.timestamp;
 
       nft.eventId = await this.saveEventEntities(event, nft.eventId);
@@ -612,11 +628,14 @@ export class RMRKOffchainProcessorService {
       const nft = await this.nftRepository.findOne(interaction.id);
       validateNFT(nft);
       validateMeta(interaction);
-      isOwnerOrElseError(nft, remark.caller);
+
+      // bugfix:  currentOwner may be account or nft, so should no validate currentOwner.
+      //isOwnerOrElseError(nft, remark.caller);
+
       const price = BigInt(interaction.metadata);
       isPositiveOrElseError(price);
       nft.price = price.toString();
-      let event = eventFrom(RmrkEvent.LIST, remark, interaction.metadata, nft.collectionId, nft.id, nft.currentOwner, nft.price);
+      let event = eventFrom(RmrkEvent.LIST, remark, interaction.metadata, nft.collectionId, nft.id, remark.caller, nft.price);
       nft.timestampUpdatedAt = remark.timestamp;
 
       nft.eventId = await this.saveEventEntities(event, nft.eventId);
@@ -644,9 +663,13 @@ export class RMRKOffchainProcessorService {
       canOrElseError<RmrkInteraction>(hasMeta, interaction, true)
       const collection = await this.collectionRepository.findOne(interaction.id)
       canOrElseError<CollectionEntities>(exists, collection, true)
-      isOwnerOrElseError(collection, remark.caller);
-      let event = (eventFrom(RmrkEvent.CHANGEISSUER, remark, interaction.metadata, collection.id, '', collection.currentOwner, BigInt(0).toString()))
-      collection.currentOwner = interaction.metadata;
+
+      // bugfix:  currentOwner may be account or nft, so should no validate currentOwner.
+      //isCurrentOwnerOrElseError(nft, remark.caller);
+
+
+      let event = (eventFrom(RmrkEvent.CHANGEISSUER, remark, interaction.metadata, collection.id, '', remark.caller, BigInt(0).toString()))
+      collection.currentOwnerAccount = interaction.metadata;
       collection.eventId = await this.saveEventEntities(event, collection.eventId);
 
       await this.collectionRepository.save(collection);
@@ -707,7 +730,8 @@ export class RMRKOffchainProcessorService {
         interaction,
         remark: JSON.stringify(remark),
         timestamp: now,
-
+        blockNumber: remark.blockNumber,
+        remark_entity_id: remark.remark_entity_id
       };
 
       await this.failedRepository.save(fail);
@@ -755,7 +779,7 @@ export class RMRKOffchainProcessorService {
 
       }
 
-      let event = eventFrom(RmrkEvent.ACCEPT, remark, interaction.id2, nft.collectionId, nft.id, nft.currentOwner, nft.price);
+      let event = eventFrom(RmrkEvent.ACCEPT, remark, interaction.id2, nft.collectionId, nft.id, remark.caller, nft.price);
       nft.timestampUpdatedAt = remark.timestamp;
 
       nft.eventId = await this.saveEventEntities(event, nft.eventId);
@@ -804,7 +828,7 @@ export class RMRKOffchainProcessorService {
         metadata: resMetadata,
         pending: true   // enter a pending state and MUST be accepted with a ACCEPT 
       };
-      if (isOwner(nft, remark.caller)) {
+      if (isOwnerAccount(nft, remark.caller)) {
         //If the issuer is also the owner of this NFT, this interaction also counts as a ACCEPT automatically.
         //auto ACCEPT
         newResource.pending = false;
@@ -816,7 +840,7 @@ export class RMRKOffchainProcessorService {
       resources.push(newResource);
       nft.resources = resources;
 
-      let event = (eventFrom(RmrkEvent.RESADD, remark, interaction.metadata, nft.collectionId, nft.id, nft.currentOwner, nft.price));
+      let event = (eventFrom(RmrkEvent.RESADD, remark, interaction.metadata, nft.collectionId, nft.id, remark.caller, nft.price));
       nft.timestampUpdatedAt = remark.timestamp;
 
       nft.eventId = await this.saveEventEntities(event, nft.eventId);

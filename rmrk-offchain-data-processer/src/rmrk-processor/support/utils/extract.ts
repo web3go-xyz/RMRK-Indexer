@@ -11,6 +11,7 @@ export interface RemarkResult {
   blockNumber: string;
   timestamp: Date;
   extra?: ExtraCall[];
+  remark_entity_id: string;
 }
 
 export interface RemarkResultEntity extends RemarkResult {

@@ -21,5 +21,10 @@ export class FailedEntities {
   @Column("timestamp without time zone", { name: "timestamp", nullable: true })
   timestamp: Date | null;
 
- 
+
+  @Column("text", { name: "block_number", nullable: true })
+  blockNumber: string | null;
+
+  @Column("text", { nullable: true, name: "remark_entity_id" })
+  remark_entity_id: string;
 }

@@ -1,6 +1,6 @@
 import { RmrkInteraction } from './types'
 import { ExtraCall } from './extract'
-import { NFTEntities } from 'src/common/entity/RMRKModule/NFTEntities' 
+import { NFTEntities } from 'src/common/entity/RMRKModule/NFTEntities'
 import { CollectionEntities } from 'src/common/entity/RMRKModule/CollectionEntities'
 type Entity = CollectionEntities | NFTEntities
 
@@ -20,8 +20,8 @@ export function hasMeta(nft: RmrkInteraction): nft is RmrkInteraction {
   return !!nft.metadata
 }
 
-export function isOwner(entity: Entity, caller: string) {
-  return entity.currentOwner === caller
+export function isOwnerAccount(entity: Entity, caller: string) {
+  return entity.currentOwnerAccount === caller
 }
 
 export function isIssuer(entity: Entity, caller: string) {
@@ -29,9 +29,9 @@ export function isIssuer(entity: Entity, caller: string) {
 }
 
 
-export function isOwnerOrElseError(entity: Entity, caller: string) {
-  if (!isOwner(entity, caller)) {
-    throw new ReferenceError(`[CONSOLIDATE Bad Owner] Entity: ${entity.issuer} Caller: ${caller}`)
+export function isCurrentOwnerAccountOrElseError(entity: Entity, caller: string) {
+  if (!isOwnerAccount(entity, caller)) {
+    throw new ReferenceError(`[CONSOLIDATE Bad OwnerAccount] Entity: ${entity.issuer} Caller: ${caller}`)
   }
 }
 
@@ -67,7 +67,8 @@ export function isPositiveOrElseError(entity: BigInt | number, excludeZero?: boo
 
 
 const isBalanceTransfer = ({ section, method }: ExtraCall) => section === 'balances' && method === 'transfer'
-const canBuy = (nft: NFTEntities) => (call: ExtraCall) => isBalanceTransfer(call) && isOwner(nft, call.args[0]) && BigInt(call.args[1]) >= BigInt(nft.price)
+const canBuy = (nft: NFTEntities) => (call: ExtraCall) => isBalanceTransfer(call)
+  && BigInt(call.args[1]) >= BigInt(nft.price)
 
 export function isBuyLegalOrElseError(entity: NFTEntities, extraCalls: ExtraCall[]) {
   const result = extraCalls.some(canBuy(entity))

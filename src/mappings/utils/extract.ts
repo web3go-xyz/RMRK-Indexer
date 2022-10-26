@@ -76,17 +76,28 @@ export const getRemarksFrom = (extrinsic: SubstrateExtrinsic): RemarkResult[] =>
   return [];
 }
 
+const RUN_ON_SUBQUERY_HOST: boolean = true;
 
 export const processBatch = (calls: TCall[], caller: string, blockNumber: string, timestamp: Date): RemarkResult[] => {
-  const extra: ExtraCall[] = []
-  return calls
-  .filter(call => {
-    if (isSystemRemark(call)) {
-      return true
+  let extra: ExtraCall[] = [];
+  let results:RemarkResult[]=[];
+ 
+  for (const call of calls) {
+    if (isSystemRemark(call)) {      
+     results.push({ value: call.args.toString(), caller, blockNumber, timestamp, extra });
     } else {
-      extra.push({ section: call.section, method: call.method, args: call.args.toString().split(',') })
-      return false
+      if (extra && extra.length > 100 && RUN_ON_SUBQUERY_HOST === true) {
+        logger.warn(
+          `extra is too large over 100 records, just take 100 records when RUN_ON_SUBQUERY_HOST==true`
+        ); 
+      }else{
+        extra.push({ section: call.section, method: call.method, args: call.args.toString().split(',') });
+      } 
     }
-  })
-  .map(call => ({ value: call.args.toString(), caller, blockNumber, timestamp, extra }))
+  }
+  for (const r of results) {
+    r.extra=extra; 
+  }
+  return results;
+  
 }
