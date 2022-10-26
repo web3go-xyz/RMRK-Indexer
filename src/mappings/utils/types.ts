@@ -1,8 +1,5 @@
-import { CollectionEntity, NFTEntity } from '../../types'
-import { Event } from '../../types'
+
 import { RemarkResult } from './extract'
-
-
 
 
 export enum RmrkEvent {
@@ -42,26 +39,7 @@ export const getNftId = (nft: any, blocknumber?: string | number): string => {
 export const getNftId_V01 = (nft: any): string => {
   return `${nft.collection}-${nft.instance || nft.name}-${nft.sn}`
 }
-export function eventFrom(interaction: RmrkEvent,
-  { blockNumber, caller, timestamp }: RemarkResult,
-  meta: string,
-  interactionCollection: string,
-  interactionNFT: string,
-  interactionAccount: string,
-  nftPrice: BigInt): Event {
-  let nftPriceString = nftPrice.toString();
-  return {
-    interaction,
-    blockNumber,
-    caller,
-    timestamp,
-    meta,
-    interactionCollection,
-    interactionNFT,
-    interactionAccount,
-    nftPrice: nftPriceString
-  }
-}
+
 
 export interface RmrkInteraction {
   id: string;
